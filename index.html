@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Real Madrid Match Sync</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background-color: #0c141f;
+      color: #ffffff;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 24px;
+      text-align: center;
+    }
+    .card {
+      background: #182232;
+      border: 1px solid #273549;
+      border-radius: 16px;
+      padding: 28px 20px;
+      max-width: 420px;
+      width: 100%;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.4);
+    }
+    .badge {
+      font-size: 42px;
+      margin-bottom: 8px;
+    }
+    h1 {
+      font-size: 22px;
+      font-weight: 700;
+      margin-bottom: 8px;
+      color: #ffffff;
+    }
+    p.sub {
+      color: #94a3b8;
+      font-size: 14px;
+      line-height: 1.4;
+      margin-bottom: 26px;
+    }
+    .btn {
+      width: 100%;
+      padding: 16px;
+      border-radius: 12px;
+      border: none;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      margin-bottom: 12px;
+      transition: opacity 0.2s, transform 0.1s;
+    }
+    .btn:active { transform: scale(0.98); }
+    .btn-primary {
+      background-color: #00529f;
+      color: #ffffff;
+    }
+    .btn-secondary {
+      background-color: #febe10;
+      color: #0c141f;
+    }
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    #status {
+      margin-top: 18px;
+      font-size: 14px;
+      min-height: 24px;
+      font-weight: 500;
+    }
+    .status-working { color: #38bdf8; }
+    .status-success { color: #4ade80; }
+    .status-error { color: #f87171; }
+    .match-preview {
+      margin-top: 20px;
+      text-align: left;
+      max-height: 180px;
+      overflow-y: auto;
+      font-size: 12px;
+      color: #cbd5e1;
+      border-top: 1px solid #273549;
+      padding-top: 12px;
+      display: none;
+    }
+    .match-item {
+      padding: 6px 0;
+      border-bottom: 1px solid #1e2d42;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="card">
+    <div class="badge">⚽</div>
+    <h1>Real Madrid Match Sync</h1>
+    <p class="sub">Add upcoming fixtures directly to your Google Calendar in US Eastern Time (ET).</p>
+
+    <button id="btnSyncTen" class="btn btn-primary" onclick="syncMatches(10)">
+      Sync Next 10 Matches
+    </button>
+    
+    <button id="btnSyncAll" class="btn btn-secondary" onclick="syncMatches(999)">
+      Sync All Upcoming Matches
+    </button>
+
+    <div id="status"></div>
+    <div id="preview" class="match-preview"></div>
+  </div>
+
+  <script>
+    async function syncMatches(limit) {
+      const btnTen = document.getElementById("btnSyncTen");
+      const btnAll = document.getElementById("btnSyncAll");
+      const status = document.getElementById("status");
+      const preview = document.getElementById("preview");
+
+      btnTen.disabled = true;
+      btnAll.disabled = true;
+      status.className = "status-working";
+      status.innerText = "Fetching Real Madrid fixtures...";
+      preview.style.display = "none";
+      preview.innerHTML = "";
+
+      try {
+        // ESPN Soccer API for Real Madrid (ID 86)
+        const response = await fetch("https://site.api.espn.com/apis/site/v2/sports/soccer/esp.1/teams/86/schedule");
+        if (!response.ok) throw new Error("Could not fetch data from ESPN");
+
+        const data = await response.json();
+        const events = data.events || [];
+        const now = new Date();
+
+        const upcoming = [];
+        for (const evt of events) {
+          const matchDate = new Date(evt.date);
+          if (matchDate > now) {
+            upcoming.push(evt);
+          }
+        }
+
+        if (upcoming.length === 0) {
+          status.className = "status-error";
+          status.innerText = "No upcoming matches found scheduled.";
+          btnTen.disabled = false;
+          btnAll.disabled = false;
+          return;
+        }
+
+        const selected = upcoming.slice(0, limit);
+
+        // Generate iCalendar (.ics) content
+        let icsData = [
+          "BEGIN:VCALENDAR",
+          "VERSION:2.0",
+          "PRODID:-//Real Madrid ET Fixtures//EN",
+          "CALSCALE:GREGORIAN",
+          "METHOD:PUBLISH"
+        ];
+
+        let previewHtml = "<strong>Upcoming Matches Added (ET):</strong><br/>";
+
+        for (const match of selected) {
+          const matchName = match.name || "Real Madrid Match";
+          const matchDate = new Date(match.date);
+          const endDate = new Date(matchDate.getTime() + (2 * 60 * 60 * 1000)); // +2 hours
+
+          let venue = "Santiago Bernabéu";
+          if (match.competitions && match.competitions[0]?.venue?.fullName) {
+            venue = match.competitions[0].venue.fullName;
+          }
+
+          // Format in US Eastern Time
+          const etTimeStr = matchDate.toLocaleString("en-US", {
+            timeZone: "America/New_York",
+            month: "short",
+            day: "numeric",
+            hour: "numeric",
+            minute: "2-digit",
+            timeZoneName: "short"
+          });
+
+          // Unique ID based on ESPN match ID to avoid duplicates
+          const uid = `realmadrid-${match.id}@soccersync.app`;
+
+          const formatICSDate = (d) => {
+            return d.toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
+          };
+
+          icsData.push("BEGIN:VEVENT");
+          icsData.push(`UID:${uid}`);
+          icsData.push(`DTSTAMP:${formatICSDate(new Date())}`);
+          icsData.push(`DTSTART:${formatICSDate(matchDate)}`);
+          icsData.push(`DTEND:${formatICSDate(endDate)}`);
+          icsData.push(`SUMMARY:${matchName}`);
+          icsData.push(`LOCATION:${venue}`);
+          icsData.push(`DESCRIPTION:Real Madrid fixture. Kick-off in Eastern Time: ${etTimeStr}`);
+          icsData.push("STATUS:CONFIRMED");
+          icsData.push("END:VEVENT");
+
+          previewHtml += `<div class="match-item">⚽ ${matchName}<br/><span style="color:#94a3b8">${etTimeStr} • ${venue}</span></div>`;
+        }
+
+        icsData.push("END:VCALENDAR");
+
+        // Create downloadable .ics calendar file
+        const blob = new Blob([icsData.join("\r\n")], { type: "text/calendar;charset=utf-8" });
+        const downloadUrl = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = downloadUrl;
+        link.setAttribute("download", "real_madrid_schedule.ics");
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+
+        status.className = "status-success";
+        status.innerText = `Synced ${selected.length} match${selected.length > 1 ? 'es' : ''}! Tap the downloaded calendar file to add them to Google Calendar.`;
+        preview.innerHTML = previewHtml;
+        preview.style.display = "block";
+
+      } catch (err) {
+        status.className = "status-error";
+        status.innerText = "Error: " + err.message;
+      } finally {
+        btnTen.disabled = false;
+        btnAll.disabled = false;
+      }
+    }
+  </script>
+</body>
+</html>
