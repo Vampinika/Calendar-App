@@ -1,36 +1,427 @@
-# This is a basic workflow to help you get started with Actions
+name: Build Real Madrid Calendar APK
 
-name: CI
-
-# Controls when the workflow will run
 on:
-  # Triggers the workflow on push or pull request events but only for the "main" branch
   push:
-    branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
-
-  # Allows you to run this workflow manually from the Actions tab
+    branches: [ "main", "master" ]
   workflow_dispatch:
 
-# A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
-  # This workflow contains a single job called "build"
   build:
-    # The type of runner that the job will run on
     runs-on: ubuntu-latest
 
-    # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
-      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
-      - uses: actions/checkout@v4
+      - name: Check out repo
+        uses: actions/checkout@v4
 
-      # Runs a single command using the runners shell
-      - name: Run a one-line script
-        run: echo Hello, world!
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
 
-      # Runs a set of commands using the runners shell
-      - name: Run a multi-line script
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Bootstrap Android App Structure
         run: |
-          echo Add other actions to build,
-          echo test, and deploy your project.
+          mkdir -p app/src/main/java/com/soccer/calendar app/src/main/res/layout app/src/main/res/values
+
+          # Settings Gradle
+          cat << 'EOF' > settings.gradle
+          pluginManagement {
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
+          }
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+          rootProject.name = "RealMadridSync"
+          include ':app'
+          EOF
+
+          # Root build.gradle
+          cat << 'EOF' > build.gradle
+          plugins {
+              id 'com.android.application' version '8.2.2' apply false
+              id 'org.jetbrains.kotlin.android' version '1.9.22' apply false
+          }
+          EOF
+
+          # App build.gradle
+          cat << 'EOF' > app/build.gradle
+          plugins {
+              id 'com.android.application'
+              id 'org.jetbrains.kotlin.android'
+          }
+
+          android {
+              namespace 'com.soccer.calendar'
+              compileSdk 34
+
+              defaultConfig {
+                  applicationId "com.soccer.calendar"
+                  minSdk 26
+                  targetSdk 34
+                  versionCode 2
+                  versionName "1.1"
+              }
+
+              buildTypes {
+                  release {
+                      minifyEnabled false
+                  }
+                  debug {
+                      minifyEnabled false
+                  }
+              }
+              compileOptions {
+                  sourceCompatibility JavaVersion.VERSION_17
+                  targetCompatibility JavaVersion.VERSION_17
+              }
+              kotlinOptions {
+                  jvmTarget = '17'
+              }
+          }
+
+          dependencies {
+              implementation 'androidx.core:core-ktx:1.12.0'
+              implementation 'androidx.appcompat:appcompat:1.6.1'
+              implementation 'com.google.android.material:material:1.11.0'
+              implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+          }
+          EOF
+
+          # Android Manifest
+          cat << 'EOF' > app/src/main/AndroidManifest.xml
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <uses-permission android:name="android.permission.INTERNET" />
+              <uses-permission android:name="android.permission.READ_CALENDAR" />
+              <uses-permission android:name="android.permission.WRITE_CALENDAR" />
+
+              <application
+                  android:allowBackup="true"
+                  android:icon="@android:drawable/ic_menu_my_calendar"
+                  android:label="Real Madrid Sync"
+                  android:theme="@style/Theme.MaterialComponents.DayNight.NoActionBar">
+                  <activity
+                      android:name=".MainActivity"
+                      android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
+          EOF
+
+          # Strings & Values
+          cat << 'EOF' > app/src/main/res/values/strings.xml
+          <resources>
+              <string name="app_name">Real Madrid Sync</string>
+          </resources>
+          EOF
+
+          # App UI Layout
+          cat << 'EOF' > app/src/main/res/layout/activity_main.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+              android:layout_width="match_parent"
+              android:layout_height="match_parent"
+              android:orientation="vertical"
+              android:gravity="center"
+              android:padding="24dp"
+              android:background="#121212">
+
+              <TextView
+                  android:layout_width="wrap_content"
+                  android:layout_height="wrap_content"
+                  android:text="⚽ Real Madrid Fixtures"
+                  android:textColor="#FFFFFF"
+                  android:textSize="22sp"
+                  android:textStyle="bold"
+                  android:layout_marginBottom="10dp" />
+
+              <TextView
+                  android:layout_width="wrap_content"
+                  android:layout_height="wrap_content"
+                  android:text="Sync fixtures directly to your Google Calendar in US Eastern Time (ET)."
+                  android:textColor="#AAAAAA"
+                  android:textSize="14sp"
+                  android:gravity="center"
+                  android:layout_marginBottom="32dp" />
+
+              <Button
+                  android:id="@+id/btnSyncTen"
+                  android:layout_width="match_parent"
+                  android:layout_height="56dp"
+                  android:text="Sync Next 10 Matches"
+                  android:backgroundTint="#00529F"
+                  android:textColor="#FFFFFF"
+                  android:textStyle="bold"
+                  android:layout_marginBottom="14dp" />
+
+              <Button
+                  android:id="@+id/btnSyncAll"
+                  android:layout_width="match_parent"
+                  android:layout_height="56dp"
+                  android:text="Sync All Upcoming Matches"
+                  android:backgroundTint="#FEBE10"
+                  android:textColor="#000000"
+                  android:textStyle="bold" />
+
+              <ProgressBar
+                  android:id="@+id/progressBar"
+                  android:layout_width="wrap_content"
+                  android:layout_height="wrap_content"
+                  android:visibility="gone"
+                  android:layout_marginTop="24dp" />
+
+              <TextView
+                  android:id="@+id/txtStatus"
+                  android:layout_width="match_parent"
+                  android:layout_height="wrap_content"
+                  android:textColor="#00FF66"
+                  android:textSize="14sp"
+                  android:gravity="center"
+                  android:layout_marginTop="16dp" />
+
+          </LinearLayout>
+          EOF
+
+          # Kotlin Logic with Duplicate Checking
+          cat << 'EOF' > app/src/main/java/com/soccer/calendar/MainActivity.kt
+          package com.soccer.calendar
+
+          import android.Manifest
+          import android.content.ContentValues
+          import android.content.pm.PackageManager
+          import android.database.Cursor
+          import android.os.Bundle
+          import android.provider.CalendarContract
+          import android.view.View
+          import android.widget.Button
+          import android.widget.ProgressBar
+          import android.widget.TextView
+          import android.widget.Toast
+          import androidx.appcompat.app.AppCompatActivity
+          import androidx.core.app.ActivityCompat
+          import androidx.core.content.ContextCompat
+          import org.json.JSONObject
+          import java.net.HttpURLConnection
+          import java.net.URL
+          import java.time.Instant
+          import java.time.ZoneId
+          import java.time.format.DateTimeFormatter
+
+          class MainActivity : AppCompatActivity() {
+
+              private val PERMISSION_REQUEST_CODE = 101
+              private lateinit var btnSyncTen: Button
+              private lateinit var btnSyncAll: Button
+              private lateinit var progressBar: ProgressBar
+              private lateinit var txtStatus: TextView
+              private var pendingLimit: Int? = null
+
+              override fun onCreate(savedInstanceState: Bundle?) {
+                  super.onCreate(savedInstanceState)
+                  setContentView(R.layout.activity_main)
+
+                  btnSyncTen = findViewById(R.id.btnSyncTen)
+                  btnSyncAll = findViewById(R.id.btnSyncAll)
+                  progressBar = findViewById(R.id.progressBar)
+                  txtStatus = findViewById(R.id.txtStatus)
+
+                  btnSyncTen.setOnClickListener {
+                      startSyncWorkflow(10)
+                  }
+
+                  btnSyncAll.setOnClickListener {
+                      startSyncWorkflow(Int.MAX_VALUE)
+                  }
+              }
+
+              private fun startSyncWorkflow(limit: Int) {
+                  pendingLimit = limit
+                  if (hasCalendarPermissions()) {
+                      fetchAndSyncMatches(limit)
+                  } else {
+                      ActivityCompat.requestPermissions(
+                          this,
+                          arrayOf(Manifest.permission.READ_CALENDAR, Manifest.permission.WRITE_CALENDAR),
+                          PERMISSION_REQUEST_CODE
+                      )
+                  }
+              }
+
+              private fun hasCalendarPermissions(): Boolean {
+                  val read = ContextCompat.checkSelfPermission(this, Manifest.permission.READ_CALENDAR)
+                  val write = ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_CALENDAR)
+                  return read == PackageManager.PERMISSION_GRANTED && write == PackageManager.PERMISSION_GRANTED
+              }
+
+              override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+                  super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+                  if (requestCode == PERMISSION_REQUEST_CODE && grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                      pendingLimit?.let { fetchAndSyncMatches(it) }
+                  } else {
+                      Toast.makeText(this, "Calendar permissions required to sync games", Toast.LENGTH_LONG).show()
+                  }
+              }
+
+              private fun fetchAndSyncMatches(limit: Int) {
+                  btnSyncTen.isEnabled = false
+                  btnSyncAll.isEnabled = false
+                  progressBar.visibility = View.VISIBLE
+                  txtStatus.text = "Fetching upcoming Real Madrid matches..."
+
+                  Thread {
+                      try {
+                          val apiUrl = "https://site.api.espn.com/apis/site/v2/sports/soccer/esp.1/teams/86/schedule"
+                          val url = URL(apiUrl)
+                          val conn = url.openConnection() as HttpURLConnection
+                          conn.requestMethod = "GET"
+                          conn.connectTimeout = 8000
+                          conn.readTimeout = 8000
+
+                          val response = conn.inputStream.bufferedReader().use { it.readText() }
+                          val json = JSONObject(response)
+                          val events = json.getJSONArray("events")
+
+                          val now = Instant.now()
+                          var addedCount = 0
+                          var skippedCount = 0
+                          val calId = getPrimaryCalendarId()
+
+                          for (i in 0 until events.length()) {
+                              if (addedCount >= limit) break
+
+                              val eventObj = events.getJSONObject(i)
+                              val dateStr = eventObj.getString("date")
+                              val matchInstant = Instant.parse(dateStr)
+
+                              if (matchInstant.isAfter(now)) {
+                                  val name = eventObj.optString("name", "Real Madrid Match")
+                                  val competitions = eventObj.getJSONArray("competitions")
+                                  var venueName = "Santiago Bernabéu"
+                                  if (competitions.length() > 0) {
+                                      val comp = competitions.getJSONObject(0)
+                                      venueName = comp.optJSONObject("venue")?.optString("fullName", venueName) ?: venueName
+                                  }
+
+                                  val easternZone = ZoneId.of("America/New_York")
+                                  val easternTime = matchInstant.atZone(easternZone)
+                                  val formattedTime = easternTime.format(DateTimeFormatter.ofPattern("MMM dd, yyyy 'at' hh:mm a z"))
+                                  val startEpoch = matchInstant.toEpochMilli()
+                                  val endEpoch = startEpoch + (2 * 60 * 60 * 1000)
+
+                                  if (!isEventAlreadyAdded(calId, name, startEpoch)) {
+                                      addEventToCalendar(
+                                          calendarId = calId,
+                                          title = name,
+                                          description = "Kick-off (ET): $formattedTime\nSynced automatically via Real Madrid Sync",
+                                          location = venueName,
+                                          startMillis = startEpoch,
+                                          endMillis = endEpoch
+                                      )
+                                      addedCount++
+                                  } else {
+                                      skippedCount++
+                                  }
+                              }
+                          }
+
+                          runOnUiThread {
+                              progressBar.visibility = View.GONE
+                              btnSyncTen.isEnabled = true
+                              btnSyncAll.isEnabled = true
+
+                              if (addedCount == 0 && skippedCount > 0) {
+                                  txtStatus.text = "All upcoming matches are already in your calendar!"
+                              } else {
+                                  txtStatus.text = "Added $addedCount matches to your calendar in Eastern Time ($skippedCount already present)."
+                              }
+                          }
+
+                      } catch (e: Exception) {
+                          runOnUiThread {
+                              progressBar.visibility = View.GONE
+                              btnSyncTen.isEnabled = true
+                              btnSyncAll.isEnabled = true
+                              txtStatus.text = "Error syncing: ${e.localizedMessage}"
+                          }
+                      }
+                  }.start()
+              }
+
+              private fun isEventAlreadyAdded(calendarId: Long, title: String, startMillis: Long): Boolean {
+                  val projection = arrayOf(CalendarContract.Events._ID)
+                  val selection = "${CalendarContract.Events.CALENDAR_ID} = ? AND ${CalendarContract.Events.TITLE} = ? AND ${CalendarContract.Events.DTSTART} = ?"
+                  val selectionArgs = arrayOf(calendarId.toString(), title, startMillis.toString())
+
+                  val cursor: Cursor? = contentResolver.query(
+                      CalendarContract.Events.CONTENT_URI,
+                      projection,
+                      selection,
+                      selectionArgs,
+                      null
+                  )
+                  cursor?.use {
+                      return it.count > 0
+                  }
+                  return false
+              }
+
+              private fun getPrimaryCalendarId(): Long {
+                  val projection = arrayOf(CalendarContract.Calendars._ID, CalendarContract.Calendars.IS_PRIMARY)
+                  val cursor: Cursor? = contentResolver.query(
+                      CalendarContract.Calendars.CONTENT_URI,
+                      projection,
+                      null,
+                      null,
+                      null
+                  )
+                  cursor?.use {
+                      while (it.moveToNext()) {
+                          return it.getLong(0)
+                      }
+                  }
+                  return 1L
+              }
+
+              private fun addEventToCalendar(calendarId: Long, title: String, description: String, location: String, startMillis: Long, endMillis: Long) {
+                  val values = ContentValues().apply {
+                      put(CalendarContract.Events.DTSTART, startMillis)
+                      put(CalendarContract.Events.DTEND, endMillis)
+                      put(CalendarContract.Events.TITLE, title)
+                      put(CalendarContract.Events.DESCRIPTION, description)
+                      put(CalendarContract.Events.EVENT_LOCATION, location)
+                      put(CalendarContract.Events.CALENDAR_ID, calendarId)
+                      put(CalendarContract.Events.EVENT_TIMEZONE, "America/New_York")
+                  }
+                  contentResolver.insert(CalendarContract.Events.CONTENT_URI, values)
+              }
+          }
+          EOF
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: '8.5'
+
+      - name: Build Debug APK
+        run: |
+          gradle assembleDebug --stacktrace
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: RealMadridSync-APK
+          path: app/build/outputs/apk/debug/app-debug.apk
