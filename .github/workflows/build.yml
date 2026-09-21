@@ -19,6 +19,15 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
+      - name: Set up Android SDK & Accept Licenses
+        uses: android-actions/setup-android@v3
+        with:
+          cmdline-tools-version: 11076708
+
+      - name: Accept Android Licenses
+        run: |
+          yes | sdkmanager --licenses || true
+
       - name: Bootstrap Android App Structure
         run: |
           mkdir -p app/src/main/java/com/soccer/calendar app/src/main/res/layout app/src/main/res/values
@@ -72,6 +81,9 @@ jobs:
 
               buildTypes {
                   release {
+                      minifyEnabled false
+                  }
+                  debug {
                       minifyEnabled false
                   }
               }
@@ -190,7 +202,7 @@ jobs:
           </LinearLayout>
           EOF
 
-          # Kotlin Logic with Duplicate Checking & Dual Limits
+          # Kotlin Logic
           cat << 'EOF' > app/src/main/java/com/soccer/calendar/MainActivity.kt
           package com.soccer.calendar
 
@@ -198,7 +210,6 @@ jobs:
           import android.content.ContentValues
           import android.content.pm.PackageManager
           import android.database.Cursor
-          import android.net.Uri
           import android.os.Bundle
           import android.provider.CalendarContract
           import android.view.View
@@ -337,7 +348,7 @@ jobs:
                               progressBar.visibility = View.GONE
                               btnSyncTen.isEnabled = true
                               btnSyncAll.isEnabled = true
-                              
+
                               if (addedCount == 0 && skippedCount > 0) {
                                   txtStatus.text = "All upcoming matches are already in your calendar!"
                               } else {
@@ -406,9 +417,15 @@ jobs:
           }
           EOF
 
+      - name: Generate Gradle Wrapper
+        run: |
+          gradle wrapper --gradle-version 8.5
+
+      - name: Make Gradlew Executable
+        run: chmod +x gradlew
+
       - name: Build Debug APK
         run: |
-          gradle wrapper --gradle-version 8.4
           ./gradlew assembleDebug --stacktrace
 
       - name: Upload APK Artifact
