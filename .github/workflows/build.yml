@@ -1,4 +1,4 @@
-name: Build WebView APK
+name: Build Real Madrid APK
 
 on:
   push:
@@ -19,20 +19,12 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Accept Android Licenses
-        run: yes | sdkmanager --licenses || true
-
-      - name: Create WebView Project Wrapper
+      - name: Bootstrap Android App Structure
         run: |
           mkdir -p app/src/main/assets app/src/main/java/com/soccer/calendar app/src/main/res/values
 
-          # Copy our index.html into Android assets
           cp index.html app/src/main/assets/index.html
 
-          # settings.gradle
           cat << 'EOF' > settings.gradle
           pluginManagement {
               repositories { google(); mavenCentral(); gradlePluginPortal() }
@@ -45,7 +37,6 @@ jobs:
           include ':app'
           EOF
 
-          # build.gradle (root)
           cat << 'EOF' > build.gradle
           plugins {
               id 'com.android.application' version '8.2.2' apply false
@@ -53,7 +44,6 @@ jobs:
           }
           EOF
 
-          # app/build.gradle
           cat << 'EOF' > app/build.gradle
           plugins {
               id 'com.android.application'
@@ -85,7 +75,6 @@ jobs:
           }
           EOF
 
-          # AndroidManifest.xml
           cat << 'EOF' > app/src/main/AndroidManifest.xml
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <uses-permission android:name="android.permission.INTERNET" />
@@ -106,14 +95,12 @@ jobs:
           </manifest>
           EOF
 
-          # strings.xml
           cat << 'EOF' > app/src/main/res/values/strings.xml
           <resources>
               <string name="app_name">Real Madrid Sync</string>
           </resources>
           EOF
 
-          # MainActivity.kt (Loads local index.html inside a native WebView)
           cat << 'EOF' > app/src/main/java/com/soccer/calendar/MainActivity.kt
           package com.soccer.calendar
 
@@ -137,8 +124,9 @@ jobs:
           }
           EOF
 
-      - name: Generate Gradle Wrapper & Build
+      - name: Build Debug APK
         run: |
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
           gradle wrapper --gradle-version 8.5
           chmod +x gradlew
           ./gradlew assembleDebug --stacktrace
