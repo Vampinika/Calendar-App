@@ -127,24 +127,14 @@
       preview.innerHTML = "";
 
       try {
-        // Query current and upcoming calendar year data from ESPN
-        const currentYear = new Date().getFullYear();
-        const url = `https://site.api.espn.com/apis/site/v2/sports/soccer/esp.1/teams/86/schedule?dates=${currentYear}`;
+        // Direct team schedule endpoint for Real Madrid (ID 86)
+        const url = "https://site.api.espn.com/apis/site/v2/sports/soccer/esp.1/teams/86/schedule";
         
         const response = await fetch(url);
         if (!response.ok) throw new Error("Could not fetch data from ESPN");
 
         const data = await response.json();
-        let events = data.events || [];
-        
-        // If current year returns empty, try next year
-        if (events.length === 0) {
-          const responseNext = await fetch(`https://site.api.espn.com/apis/site/v2/sports/soccer/esp.1/teams/86/schedule?dates=${currentYear + 1}`);
-          if (responseNext.ok) {
-            const dataNext = await responseNext.json();
-            events = dataNext.events || [];
-          }
-        }
+        const events = data.events || [];
 
         const now = new Date();
         const upcoming = [];
