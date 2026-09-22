@@ -127,14 +127,26 @@
       preview.innerHTML = "";
 
       try {
-        // ESPN Soccer API for Real Madrid (ID 86)
-        const response = await fetch("https://site.api.espn.com/apis/site/v2/sports/soccer/esp.1/teams/86/schedule");
+        // Query current and upcoming calendar year data from ESPN
+        const currentYear = new Date().getFullYear();
+        const url = `https://site.api.espn.com/apis/site/v2/sports/soccer/esp.1/teams/86/schedule?dates=${currentYear}`;
+        
+        const response = await fetch(url);
         if (!response.ok) throw new Error("Could not fetch data from ESPN");
 
         const data = await response.json();
-        const events = data.events || [];
-        const now = new Date();
+        let events = data.events || [];
+        
+        // If current year returns empty, try next year
+        if (events.length === 0) {
+          const responseNext = await fetch(`https://site.api.espn.com/apis/site/v2/sports/soccer/esp.1/teams/86/schedule?dates=${currentYear + 1}`);
+          if (responseNext.ok) {
+            const dataNext = await responseNext.json();
+            events = dataNext.events || [];
+          }
+        }
 
+        const now = new Date();
         const upcoming = [];
         for (const evt of events) {
           const matchDate = new Date(evt.date);
@@ -153,7 +165,6 @@
 
         const selected = upcoming.slice(0, limit);
 
-        // Generate iCalendar (.ics) content
         let icsData = [
           "BEGIN:VCALENDAR",
           "VERSION:2.0",
@@ -167,14 +178,13 @@
         for (const match of selected) {
           const matchName = match.name || "Real Madrid Match";
           const matchDate = new Date(match.date);
-          const endDate = new Date(matchDate.getTime() + (2 * 60 * 60 * 1000)); // +2 hours
+          const endDate = new Date(matchDate.getTime() + (2 * 60 * 60 * 1000));
 
           let venue = "Santiago Bernabéu";
           if (match.competitions && match.competitions[0]?.venue?.fullName) {
             venue = match.competitions[0].venue.fullName;
           }
 
-          // Format in US Eastern Time
           const etTimeStr = matchDate.toLocaleString("en-US", {
             timeZone: "America/New_York",
             month: "short",
@@ -184,8 +194,7 @@
             timeZoneName: "short"
           });
 
-          // Unique ID based on ESPN match ID to avoid duplicates
-          const uid = `realmadrid-${match.id}@soccersync.app`;
+          const uid = `realmadrid-${match.id || match.date}@soccersync.app`;
 
           const formatICSDate = (d) => {
             return d.toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
@@ -207,7 +216,6 @@
 
         icsData.push("END:VCALENDAR");
 
-        // Create downloadable .ics calendar file
         const blob = new Blob([icsData.join("\r\n")], { type: "text/calendar;charset=utf-8" });
         const downloadUrl = URL.createObjectURL(blob);
         const link = document.createElement("a");
@@ -218,7 +226,7 @@
         document.body.removeChild(link);
 
         status.className = "status-success";
-        status.innerText = `Synced ${selected.length} match${selected.length > 1 ? 'es' : ''}! Tap the downloaded calendar file to add them to Google Calendar.`;
+        status.innerText = `Synced ${selected.length} match${selected.length > 1 ? 'es' : ''}! Tap the downloaded .ics file to add them to Google Calendar.`;
         preview.innerHTML = previewHtml;
         preview.style.display = "block";
 
